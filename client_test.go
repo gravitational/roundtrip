@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,24 @@ func (s *ClientSuite) TestGet(c *C) {
 	clt.Get(clt.Endpoint("a", "b"), values)
 	c.Assert(method, Equals, "GET")
 	c.Assert(query, DeepEquals, values)
+}
+
+func (s *ClientSuite) TestGetFile(c *C) {
+	fileName := filepath.Join(c.MkDir(), "file.txt")
+	err := ioutil.WriteFile(fileName, []byte("hello there"), 0666)
+	c.Assert(err, IsNil)
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, fileName)
+	})
+	defer srv.Close()
+
+	clt := newC(srv.URL, "v1")
+	f, err := clt.GetFile(clt.Endpoint("download"), url.Values{})
+	c.Assert(err, IsNil)
+	defer f.Close()
+	data, err := ioutil.ReadAll(f.Body())
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "hello there")
 }
 
 func (s *ClientSuite) TestReplyNotFound(c *C) {

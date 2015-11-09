@@ -39,11 +39,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/mailgun/multibuf"
 )
 
 type ClientParam func(c *Client) error
@@ -179,6 +182,32 @@ func (c *Client) Get(u string, params url.Values) (*Response, error) {
 	})
 }
 
+// GetFile executes get request and returns a file like object
+//
+// f, err := c.GetFile("files", "report.txt") // returns "/v1/files/report.txt"
+//
+func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
+	baseUrl, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	baseUrl.RawQuery = params.Encode()
+	re, err := c.client.Get(baseUrl.String())
+	if err != nil {
+		return nil, err
+	}
+	defer re.Body.Close()
+	body, err := multibuf.New(re.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &FileResponse{
+		code:    re.StatusCode,
+		headers: re.Header,
+		body:    body,
+	}, nil
+}
+
 // RoundTripFn inidicates any function that can be passed to RoundTrip
 // it should return http response or error in case of error
 type RoundTripFn func() (*http.Response, error)
@@ -229,4 +258,42 @@ type File struct {
 	Name     string
 	Filename string
 	Reader   io.Reader
+}
+
+// Response indicates HTTP server file response
+type FileResponse struct {
+	code    int
+	headers http.Header
+	body    multibuf.MultiReader
+}
+
+func (r *FileResponse) FileName() string {
+	value := r.headers.Get("Content-Disposition")
+	if len(value) == 0 {
+		return ""
+	}
+	_, params, err := mime.ParseMediaType(value)
+	if err != nil {
+		return ""
+	}
+	return params["filename"]
+}
+
+// Code returns HTTP response status code
+func (r *FileResponse) Code() int {
+	return r.code
+}
+
+// Headers returns http.Header dictionary with response headers
+func (r *FileResponse) Headers() http.Header {
+	return r.headers
+}
+
+// Reader returns reader with HTTP response body
+func (r *FileResponse) Body() multibuf.MultiReader {
+	return r.body
+}
+
+func (r *FileResponse) Close() error {
+	return r.body.Close()
 }
