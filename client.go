@@ -89,6 +89,11 @@ func NewClient(addr, v string, params ...ClientParam) (*Client, error) {
 	return c, nil
 }
 
+// HTTPClient returns underlying http.Client
+func (c *Client) HTTPClient() *http.Client {
+	return c.client
+}
+
 // Endpoint returns a URL constructed from parts and version appended, e.g.
 //
 // c.Endpoint("user", "john") // returns "/v1/users/john"
