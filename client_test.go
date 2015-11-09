@@ -16,6 +16,7 @@ limitations under the License.
 package roundtrip
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -96,6 +97,7 @@ func (s *ClientSuite) TestGetFile(c *C) {
 	err := ioutil.WriteFile(fileName, []byte("hello there"), 0666)
 	c.Assert(err, IsNil)
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, "file.txt"))
 		http.ServeFile(w, r, fileName)
 	})
 	defer srv.Close()
@@ -107,6 +109,7 @@ func (s *ClientSuite) TestGetFile(c *C) {
 	data, err := ioutil.ReadAll(f.Body())
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, "hello there")
+	c.Assert(f.FileName(), Equals, "file.txt")
 }
 
 func (s *ClientSuite) TestReplyNotFound(c *C) {
