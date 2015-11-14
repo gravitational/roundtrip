@@ -41,12 +41,9 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/mailgun/multibuf"
 )
 
 type ClientParam func(c *Client) error
@@ -223,15 +220,10 @@ func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer re.Body.Close()
-	body, err := multibuf.New(re.Body)
-	if err != nil {
-		return nil, err
-	}
 	return &FileResponse{
 		code:    re.StatusCode,
 		headers: re.Header,
-		body:    body,
+		body:    re.Body,
 	}, nil
 }
 
@@ -297,7 +289,7 @@ type File struct {
 type FileResponse struct {
 	code    int
 	headers http.Header
-	body    multibuf.MultiReader
+	body    io.ReadCloser
 }
 
 func (r *FileResponse) FileName() string {
@@ -323,7 +315,7 @@ func (r *FileResponse) Headers() http.Header {
 }
 
 // Reader returns reader with HTTP response body
-func (r *FileResponse) Body() multibuf.MultiReader {
+func (r *FileResponse) Body() io.ReadCloser {
 	return r.body
 }
 
