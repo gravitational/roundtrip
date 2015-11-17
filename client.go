@@ -37,6 +37,7 @@ package roundtrip
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -162,6 +163,40 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 		c.addAuth(req)
 		req.Header.Set("Content-Type",
 			fmt.Sprintf(`multipart/form-data;boundary="%v"`, boundary))
+		return c.client.Do(req)
+	})
+}
+
+// PostJSON posts JSON "application/json" encoded request body
+//
+// c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
+//
+func (c *Client) PostJSON(endpoint string, data interface{}) (*Response, error) {
+	return c.RoundTrip(func() (*http.Response, error) {
+		data, err := json.Marshal(data)
+		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(data))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		c.addAuth(req)
+		return c.client.Do(req)
+	})
+}
+
+// PutJSON posts JSON "application/json" encoded request body and "PUT" method
+//
+// c.PutJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
+//
+func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
+	return c.RoundTrip(func() (*http.Response, error) {
+		data, err := json.Marshal(data)
+		req, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer(data))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		c.addAuth(req)
 		return c.client.Do(req)
 	})
 }
