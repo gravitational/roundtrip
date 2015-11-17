@@ -16,6 +16,7 @@ limitations under the License.
 package roundtrip
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -65,6 +66,40 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	c.Assert(method, Equals, "POST")
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
+}
+
+func (s *ClientSuite) TestPostJSON(c *C) {
+	var data interface{}
+	var user, pass string
+	var ok bool
+	var method string
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		user, pass, ok = r.BasicAuth()
+		err := json.NewDecoder(r.Body).Decode(&data)
+		c.Assert(err, IsNil)
+	})
+	defer srv.Close()
+
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+
+	values := map[string]interface{}{"hello": "there"}
+	_, err := clt.PostJSON(clt.Endpoint("a", "b"), values)
+
+	c.Assert(err, IsNil)
+	c.Assert(method, Equals, "POST")
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+	c.Assert(data, DeepEquals, values)
+
+	values = map[string]interface{}{"hello": "there, put"}
+	_, err = clt.PutJSON(clt.Endpoint("a", "b"), values)
+
+	c.Assert(err, IsNil)
+	c.Assert(method, Equals, "PUT")
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+	c.Assert(data, DeepEquals, values)
 }
 
 func (s *ClientSuite) TestDelete(c *C) {
