@@ -68,6 +68,26 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	c.Assert(pass, DeepEquals, "pass")
 }
 
+func (s *ClientSuite) TestAddAuth(c *C) {
+	var user, pass string
+	var ok bool
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok = r.BasicAuth()
+		io.WriteString(w, "hello back")
+	})
+	defer srv.Close()
+
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	req, err := http.NewRequest("GET", clt.Endpoint("a", "b"), nil)
+	c.Assert(err, IsNil)
+	clt.SetAuthHeader(req.Header)
+	_, err = clt.HTTPClient().Do(req)
+	c.Assert(err, IsNil)
+
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+}
+
 func (s *ClientSuite) TestPostJSON(c *C) {
 	var data interface{}
 	var user, pass string
