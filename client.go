@@ -37,6 +37,7 @@ package roundtrip
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -280,6 +281,14 @@ func (c *Client) RoundTrip(fn RoundTripFn) (*Response, error) {
 	return &Response{code: re.StatusCode, headers: re.Header, body: buf}, nil
 }
 
+// SetAuthHeader sets client's authorization headers if client
+// was configured to work with authorization
+func (c *Client) SetAuthHeader(h http.Header) {
+	if c.basicAuth != nil {
+		h.Set("Authorization", c.basicAuth.String())
+	}
+}
+
 func (c *Client) addAuth(r *http.Request) {
 	if c.basicAuth != nil {
 		r.SetBasicAuth(c.basicAuth.username, c.basicAuth.password)
@@ -361,4 +370,9 @@ func (r *FileResponse) Close() error {
 type basicAuth struct {
 	username string
 	password string
+}
+
+func (b *basicAuth) String() string {
+	auth := b.username + ":" + b.password
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 }
