@@ -110,7 +110,7 @@ func NewClient(addr, v string, params ...ClientParam) (*Client, error) {
 	c := &Client{
 		addr:   addr,
 		v:      v,
-		client: http.DefaultClient,
+		client: &http.Client{},
 	}
 	for _, p := range params {
 		if err := p(c); err != nil {
