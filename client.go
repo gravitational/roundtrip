@@ -67,7 +67,7 @@ func BasicAuth(username, password string) ClientParam {
 	}
 }
 
-// BearerAuth sets username and token for HTTP client
+// BearerAuth sets token for HTTP client
 func BearerAuth(token string) ClientParam {
 	return func(c *Client) error {
 		c.auth = &bearerAuth{token: token}
