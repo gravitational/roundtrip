@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package roundtrip
 
 import (
@@ -21,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
@@ -278,6 +280,50 @@ func (s *ClientSuite) TestGetBasicAuth(c *C) {
 	clt.Get(clt.Endpoint("a", "b"), url.Values{})
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
+}
+
+func (s *ClientSuite) TestCookies(c *C) {
+	var capturedRequestCookies []*http.Cookie
+	responseCookies := []*http.Cookie{
+		{
+			Name:  "session",
+			Value: "howdy",
+			Path:  "/",
+		},
+	}
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequestCookies = r.Cookies()
+		for _, c := range responseCookies {
+			http.SetCookie(w, c)
+		}
+	})
+	defer srv.Close()
+
+	jar, err := cookiejar.New(nil)
+	c.Assert(err, IsNil)
+	clt := newC(srv.URL, "v1", CookieJar(jar))
+
+	requestCookies := []*http.Cookie{
+		{
+			Name:  "hello",
+			Value: "here?",
+			Path:  "/",
+		},
+	}
+	u, err := url.Parse(srv.URL)
+	c.Assert(err, IsNil)
+	jar.SetCookies(u, requestCookies)
+
+	re, err := clt.Get(clt.Endpoint("test"), url.Values{})
+	c.Assert(err, IsNil)
+
+	c.Assert(len(capturedRequestCookies), Equals, len(requestCookies))
+	c.Assert(capturedRequestCookies[0].Name, DeepEquals, requestCookies[0].Name)
+	c.Assert(capturedRequestCookies[0].Value, DeepEquals, requestCookies[0].Value)
+
+	c.Assert(len(re.Cookies()), DeepEquals, len(responseCookies))
+	c.Assert(re.Cookies()[0].Name, DeepEquals, responseCookies[0].Name)
+	c.Assert(re.Cookies()[0].Value, DeepEquals, responseCookies[0].Value)
 }
 
 func newC(addr, version string, params ...ClientParam) *testClient {
