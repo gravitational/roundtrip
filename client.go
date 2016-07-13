@@ -225,7 +225,7 @@ func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
 
 // Delete executes DELETE request to the endpoint with no body
 //
-// re, err := c.Delete(c.Endpoint("users", "id1"), url.Values{"force": []string{"true"}})
+// re, err := c.Delete(c.Endpoint("users", "id1"))
 //
 func (c *Client) Delete(endpoint string) (*Response, error) {
 	return c.RoundTrip(func() (*http.Response, error) {
