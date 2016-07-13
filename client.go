@@ -238,6 +238,19 @@ func (c *Client) Delete(endpoint string) (*Response, error) {
 	})
 }
 
+// DeleteWithParams executes DELETE request to the endpoint with optional query arguments
+//
+// re, err := c.DeleteWithParams(c.Endpoint("users", "id1"), url.Values{"force": []string{"true"}})
+//
+func (c *Client) DeleteWithParams(endpoint string, params url.Values) (*Response, error) {
+	baseURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	baseURL.RawQuery = params.Encode()
+	return c.Delete(baseURL.String())
+}
+
 // Get executes GET request to the server endpoint with optional query arguments passed in params
 //
 // re, err := c.Get(c.Endpoint("users"), url.Values{"name": []string{"John"}})

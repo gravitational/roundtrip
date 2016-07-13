@@ -127,9 +127,8 @@ func (s *ClientSuite) TestPostJSON(c *C) {
 func (s *ClientSuite) TestDelete(c *C) {
 	var method string
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
-		user, pass, ok = r.BasicAuth()
+		user, pass, _ = r.BasicAuth()
 		method = r.Method
 	})
 	defer srv.Close()
@@ -141,6 +140,28 @@ func (s *ClientSuite) TestDelete(c *C) {
 	c.Assert(re.Code(), Equals, http.StatusOK)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
+}
+
+func (s *ClientSuite) TestDeleteP(c *C) {
+	var method string
+	var user, pass string
+	var query url.Values
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, _ = r.BasicAuth()
+		method = r.Method
+		query = r.URL.Query()
+	})
+	defer srv.Close()
+
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	values := url.Values{"force": []string{"true"}}
+	re, err := clt.DeleteWithParams(clt.Endpoint("a", "b"), values)
+	c.Assert(err, IsNil)
+	c.Assert(method, Equals, "DELETE")
+	c.Assert(re.Code(), Equals, http.StatusOK)
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+	c.Assert(query, DeepEquals, values)
 }
 
 func (s *ClientSuite) TestGet(c *C) {
