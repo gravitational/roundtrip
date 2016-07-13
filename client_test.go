@@ -128,19 +128,23 @@ func (s *ClientSuite) TestDelete(c *C) {
 	var method string
 	var user, pass string
 	var ok bool
+	var query url.Values
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok = r.BasicAuth()
 		method = r.Method
+		query = r.URL.Query()
 	})
 	defer srv.Close()
 
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
-	re, err := clt.Delete(clt.Endpoint("a", "b"))
+	values := url.Values{"force": []string{"true"}}
+	re, err := clt.Delete(clt.Endpoint("a", "b"), values)
 	c.Assert(err, IsNil)
 	c.Assert(method, Equals, "DELETE")
 	c.Assert(re.Code(), Equals, http.StatusOK)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
+	c.Assert(query, DeepEquals, values)
 }
 
 func (s *ClientSuite) TestGet(c *C) {

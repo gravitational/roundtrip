@@ -223,13 +223,18 @@ func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
 	})
 }
 
-// Delete executes DELETE request to the endpoint with no body
+// Delete executes DELETE request to the endpoint with optional query arguments
 //
-// re, err := c.Delete(c.Endpoint("users", "id1"))
+// re, err := c.Delete(c.Endpoint("users", "id1"), url.Values{"force": []string{"true"}})
 //
-func (c *Client) Delete(endpoint string) (*Response, error) {
+func (c *Client) Delete(endpoint string, params url.Values) (*Response, error) {
+	baseURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	baseURL.RawQuery = params.Encode()
 	return c.RoundTrip(func() (*http.Response, error) {
-		req, err := http.NewRequest("DELETE", endpoint, nil)
+		req, err := http.NewRequest("DELETE", baseURL.String(), nil)
 		if err != nil {
 			return nil, err
 		}
