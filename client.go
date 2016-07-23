@@ -297,6 +297,20 @@ func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
 	}, nil
 }
 
+type ReadSeekCloser interface {
+	io.ReadSeeker
+	io.Closer
+}
+
+func (c *Client) OpenFile(u string, params url.Values) (ReadSeekCloser, error) {
+	endpoint, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	endpoint.RawQuery = params.Encode()
+	return newSeeker(c, endpoint.String())
+}
+
 // RoundTripFn inidicates any function that can be passed to RoundTrip
 // it should return HTTP response or error in case of error
 type RoundTripFn func() (*http.Response, error)
