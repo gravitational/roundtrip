@@ -259,8 +259,6 @@ func (s *ClientSuite) TestOpenFile(c *C) {
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
 	reader, err := clt.OpenFile(clt.Endpoint("download"), url.Values{})
 	c.Assert(err, IsNil)
-
-	c.Assert(err, IsNil)
 	c.Assert(hashOfReader(reader), Equals, hash)
 
 	// seek and read again
@@ -281,6 +279,7 @@ func (s *ClientSuite) TestOpenFile(c *C) {
 	c.Assert(hashOfReader(buf), Equals, hash)
 
 	c.Assert(reader.Close(), IsNil)
+	// make sure that double close does not result in error
 	c.Assert(reader.Close(), IsNil)
 }
 

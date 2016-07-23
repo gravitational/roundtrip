@@ -304,8 +304,8 @@ type ReadSeekCloser interface {
 }
 
 // OpenFile opens file using HTTP protocol and uses `Range` headers
-// to Seek to various positions in the file, this means that server
-// has to support the flags
+// to seek to various positions in the file, this means that server
+// has to support the flags `Range` and `Content-Range`
 func (c *Client) OpenFile(u string, params url.Values) (ReadSeekCloser, error) {
 	endpoint, err := url.Parse(u)
 	if err != nil {

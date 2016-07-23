@@ -19,7 +19,7 @@ const (
 )
 
 // Seeker is a file download object
-// that supports io.ReadSeeker interface
+// that implements io.ReadSeeker interface over HTTP
 type seeker struct {
 	client        *Client
 	endpoint      string
@@ -32,8 +32,6 @@ type seeker struct {
 
 func (s *seeker) updateState(err error) error {
 	switch s.state {
-	case stateError:
-		return err
 	case stateOK, stateEOF:
 		if err == nil {
 			return nil
@@ -104,7 +102,7 @@ func (s *seeker) initReader() error {
 	if s.currentReader != nil {
 		return nil
 	}
-	// If the offset is great than or equal to size, return a empty, noop reader.
+	// If the offset is greater than or equal to size, return error
 	if s.currentOffset >= s.fileSize {
 		return trace.BadParameter("offset(%v) is > size(%v)", s.currentOffset, s.fileSize)
 	}
@@ -117,7 +115,7 @@ func (s *seeker) initReader() error {
 
 	if s.currentOffset > 0 {
 		// If we are at different offset, issue a range request from there.
-		req.Header.Add("Range", fmt.Sprintf("bytes=%v-/%v", s.currentOffset, s.fileSize))
+		req.Header.Add("Range", fmt.Sprintf("bytes=%v-", s.currentOffset))
 	}
 
 	response, err := s.client.client.Do(req)
