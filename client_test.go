@@ -17,6 +17,8 @@ limitations under the License.
 package roundtrip
 
 import (
+	"bytes"
+	"crypto/sha512"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +27,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -203,6 +206,81 @@ func (s *ClientSuite) TestGetFile(c *C) {
 	c.Assert(f.FileName(), Equals, "file.txt")
 	c.Assert(user, Equals, "user")
 	c.Assert(pass, Equals, "pass")
+}
+
+func createFile(size int64) (*os.File, string) {
+	randomStream, err := os.Open("/dev/urandom")
+	if err != nil {
+		panic(err)
+	}
+
+	out, err := ioutil.TempFile("", "")
+	if err != nil {
+		panic(err)
+	}
+
+	h := sha512.New()
+
+	_, err = io.CopyN(io.MultiWriter(out, h), randomStream, size)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = out.Seek(0, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	return out, fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func hashOfReader(r io.Reader) string {
+	h := sha512.New()
+	tr := io.TeeReader(r, h)
+	_, _ = io.Copy(ioutil.Discard, tr)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (s *ClientSuite) TestOpenFile(c *C) {
+	var fileSize int64 = 32*1024*3 + 7
+	file, hash := createFile(fileSize) // that's 3 default io.Copy buffer + some nice number to make it less aligned
+	defer os.RemoveAll(file.Name())
+
+	now := time.Now().UTC()
+	var ok bool
+	var user, pass string
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok = r.BasicAuth()
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, file.Name()))
+		http.ServeContent(w, r, file.Name(), now, file)
+	})
+	defer srv.Close()
+
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	reader, err := clt.OpenFile(clt.Endpoint("download"), url.Values{})
+	c.Assert(err, IsNil)
+	c.Assert(hashOfReader(reader), Equals, hash)
+
+	// seek and read again
+	_, err = reader.Seek(0, 0)
+	c.Assert(err, IsNil)
+	c.Assert(hashOfReader(reader), Equals, hash)
+
+	// seek to half size, concat and test resulting hash
+	buf := &bytes.Buffer{}
+	_, err = reader.Seek(0, 0)
+	c.Assert(err, IsNil)
+	_, err = io.Copy(buf, io.LimitReader(reader, fileSize/2))
+	c.Assert(err, IsNil)
+	_, err = reader.Seek(fileSize/2, 0)
+	c.Assert(err, IsNil)
+	_, err = io.Copy(buf, reader)
+	c.Assert(err, IsNil)
+	c.Assert(hashOfReader(buf), Equals, hash)
+
+	c.Assert(reader.Close(), IsNil)
+	// make sure that double close does not result in error
+	c.Assert(reader.Close(), IsNil)
 }
 
 func (s *ClientSuite) TestReplyNotFound(c *C) {
