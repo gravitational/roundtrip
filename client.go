@@ -297,11 +297,15 @@ func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
 	}, nil
 }
 
+// ReadSeekCloser implements all three of Seeker, Closer and Reader interfaces
 type ReadSeekCloser interface {
 	io.ReadSeeker
 	io.Closer
 }
 
+// OpenFile opens file using HTTP protocol and uses `Range` headers
+// to Seek to various positions in the file, this means that server
+// has to support the flags
 func (c *Client) OpenFile(u string, params url.Values) (ReadSeekCloser, error) {
 	endpoint, err := url.Parse(u)
 	if err != nil {
