@@ -135,9 +135,8 @@ func (c *Client) HTTPClient() *http.Client {
 func (c *Client) Endpoint(params ...string) string {
 	if c.v != "" {
 		return fmt.Sprintf("%s/%s/%s", c.addr, c.v, strings.Join(params, "/"))
-	} else {
-		return fmt.Sprintf("%s/%s", c.addr, strings.Join(params, "/"))
 	}
+	return fmt.Sprintf("%s/%s", c.addr, strings.Join(params, "/"))
 }
 
 // PostForm posts urlencoded form with values and returns the result
