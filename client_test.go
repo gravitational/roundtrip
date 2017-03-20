@@ -183,6 +183,20 @@ func (s *ClientSuite) TestGet(c *C) {
 	c.Assert(query, DeepEquals, values)
 }
 
+func (s *ClientSuite) TestTracer(c *C) {
+	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+	})
+	defer srv.Close()
+
+	out := &bytes.Buffer{}
+
+	clt := newC(srv.URL, "v1", Tracer(func() RequestTracer {
+		return NewWriterTracer(out)
+	}))
+	clt.Get(clt.Endpoint("a", "b"), url.Values{"q": []string{"1", "2"}})
+	c.Assert(out.String(), Matches, ".*a/b.*")
+}
+
 func (s *ClientSuite) TestGetFile(c *C) {
 	fileName := filepath.Join(c.MkDir(), "file.txt")
 	err := ioutil.WriteFile(fileName, []byte("hello there"), 0666)
