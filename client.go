@@ -51,7 +51,7 @@ import (
 // ClientParam specifies functional argument for client
 type ClientParam func(c *Client) error
 
-// Tracer sets request tracer
+// Tracer sets a request tracer constructor
 func Tracer(newTracer NewTracer) ClientParam {
 	return func(c *Client) error {
 		c.newTracer = newTracer
@@ -314,6 +314,7 @@ func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
 	tracer.Start(req)
 	re, err := c.client.Do(req)
 	if err != nil {
+		tracer.Done(nil, err)
 		return nil, err
 	}
 	tracer.Done(&Response{code: re.StatusCode}, err)
