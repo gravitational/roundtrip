@@ -167,42 +167,67 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 			c.addAuth(req)
 			return c.client.Do(req)
 		}
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
 
-		// write simple fields
-		for name, vals := range vals {
-			for _, val := range vals {
-				if err := writer.WriteField(name, val); err != nil {
-					return nil, err
-				}
-			}
-		}
+		readBody, writeBody := io.Pipe()
+		// readBody will be closed by client.Do
 
-		// add files
-		for _, f := range files {
-			w, err := writer.CreateFormFile(f.Name, f.Filename)
+		writer := multipart.NewWriter(writeBody)
+		errCh := make(chan error, 1)
+		go func() {
+			defer writeBody.Close()
+
+			err := writeForm(writer, vals, files...)
 			if err != nil {
-				return nil, err
+				errCh <- err
+				return
 			}
-			_, err = io.Copy(w, f.Reader)
-			if err != nil {
-				return nil, err
-			}
-		}
-		boundary := writer.Boundary()
-		if err := writer.Close(); err != nil {
-			return nil, err
-		}
-		req, err := http.NewRequest("POST", endpoint, body)
+
+			errCh <- writer.Close()
+		}()
+
+		req, err := http.NewRequest("POST", endpoint, readBody)
 		if err != nil {
+			readBody.Close()
+			<-errCh
 			return nil, err
 		}
 		c.addAuth(req)
 		req.Header.Set("Content-Type",
-			fmt.Sprintf(`multipart/form-data;boundary="%v"`, boundary))
-		return c.client.Do(req)
+			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
+		resp, err := c.client.Do(req)
+		errSend := <-errCh
+		if err == nil {
+			err = errSend
+		}
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
 	})
+}
+
+func writeForm(writer *multipart.Writer, vals url.Values, files ...File) error {
+	// write simple fields
+	for name, vals := range vals {
+		for _, val := range vals {
+			if err := writer.WriteField(name, val); err != nil {
+				return err
+			}
+		}
+	}
+
+	// add files
+	for _, f := range files {
+		w, err := writer.CreateFormFile(f.Name, f.Filename)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(w, f.Reader)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PostJSON posts JSON "application/json" encoded request body
