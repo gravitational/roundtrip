@@ -172,37 +172,21 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 		// readBody will be closed by client.Do
 
 		writer := multipart.NewWriter(writeBody)
-		errCh := make(chan error, 1)
 		go func() {
-			defer writeBody.Close()
-
 			err := writeForm(writer, vals, files...)
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			errCh <- writer.Close()
+			writer.Close()
+			writeBody.CloseWithError(err)
 		}()
 
 		req, err := http.NewRequest("POST", endpoint, readBody)
 		if err != nil {
 			readBody.Close()
-			<-errCh
 			return nil, err
 		}
 		c.addAuth(req)
 		req.Header.Set("Content-Type",
 			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
-		resp, err := c.client.Do(req)
-		errSend := <-errCh
-		if err == nil {
-			err = errSend
-		}
-		if err != nil {
-			return nil, err
-		}
-		return resp, nil
+		return c.client.Do(req)
 	})
 }
 
