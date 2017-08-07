@@ -39,6 +39,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -168,29 +169,60 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 			return c.client.Do(req)
 		}
 
-		readBody, writeBody := io.Pipe()
-		// readBody will be closed by client.Do
+		buffers := fromFiles(files)
+		readBody, boundary, err := tryWriteFormBuffer(vals, buffers...)
+		if err == errShortWrite {
+			// Switch to io.Pipe as the data is larger than the limit
+			// we set on memory buffer
+			var writeBody *io.PipeWriter
+			readBody, writeBody = io.Pipe()
+			// readBody will be closed by client.Do
+			writer := multipart.NewWriter(writeBody)
+			boundary = writer.Boundary()
 
-		writer := multipart.NewWriter(writeBody)
-		go func() {
-			err := writeForm(writer, vals, files...)
-			writer.Close()
-			writeBody.CloseWithError(err)
-		}()
+			buffers.reset()
+			go func() {
+				err := writeForm(writer, vals, buffers...)
+				writer.Close()
+				writeBody.CloseWithError(err)
+			}()
+		} else if err != nil {
+			return nil, err
+		}
 
 		req, err := http.NewRequest("POST", endpoint, readBody)
 		if err != nil {
-			readBody.Close()
+			if closer, ok := readBody.(io.Closer); ok {
+				closer.Close()
+			}
 			return nil, err
 		}
 		c.addAuth(req)
 		req.Header.Set("Content-Type",
-			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
+			fmt.Sprintf(`multipart/form-data;boundary="%v"`, boundary))
 		return c.client.Do(req)
 	})
 }
 
-func writeForm(writer *multipart.Writer, vals url.Values, files ...File) error {
+// tryWriteFormBuffer writes given vals and files into the form using a fixed size memory buffer.
+// Returns the output buffer and the boundary on success.
+// If the buffer is smaller than the data, fails with errShortWrite.
+func tryWriteFormBuffer(vals url.Values, files ...*formFile) (out io.Reader, boundary string, err error) {
+	var buf bytes.Buffer
+	w := &limitWriter{&buf, bufferSize}
+	writer := multipart.NewWriter(w)
+	err = writeForm(writer, vals, files...)
+	writer.Close()
+	if err == io.EOF && w.n >= 0 {
+		err = nil
+	}
+	if err == nil {
+		return &buf, writer.Boundary(), nil
+	}
+	return nil, "", err
+}
+
+func writeForm(writer *multipart.Writer, vals url.Values, files ...*formFile) error {
 	// write simple fields
 	for name, vals := range vals {
 		for _, val := range vals {
@@ -202,11 +234,11 @@ func writeForm(writer *multipart.Writer, vals url.Values, files ...File) error {
 
 	// add files
 	for _, f := range files {
-		w, err := writer.CreateFormFile(f.Name, f.Filename)
+		w, err := f.create(writer)
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(w, f.Reader)
+		_, err = io.Copy(w, f)
 		if err != nil {
 			return err
 		}
@@ -488,3 +520,82 @@ type bearerAuth struct {
 func (b *bearerAuth) String() string {
 	return "Bearer " + b.token
 }
+
+func fromFiles(files []File) formFiles {
+	res := make([]*formFile, 0, len(files))
+	for _, file := range files {
+		res = append(res, newFormFile(file))
+	}
+	return res
+}
+
+func (r formFiles) reset() {
+	for _, file := range r {
+		file.reset()
+	}
+}
+
+type formFiles []*formFile
+
+// newFormFile wraps the specified File f
+func newFormFile(f File) *formFile {
+	buf := &bytes.Buffer{}
+	return &formFile{
+		r:     io.TeeReader(f.Reader, buf),
+		f:     f,
+		cache: buf,
+	}
+}
+
+// Read reads data from the underlying reader into the specified array p
+func (r *formFile) Read(p []byte) (n int, err error) {
+	return r.r.Read(p)
+}
+
+func (r *formFile) create(w *multipart.Writer) (io.Writer, error) {
+	return w.CreateFormFile(r.f.Name, r.f.Filename)
+}
+
+// reset resets this file to read from the beginning
+// using internal cache.
+func (r *formFile) reset() {
+	r.r = io.MultiReader(r.cache, r.f.Reader)
+}
+
+// formFile is a File wrapper that buffers data from the specified File
+// and can be reset to read from the beginning
+type formFile struct {
+	r     io.Reader
+	cache *bytes.Buffer
+	f     File
+}
+
+func (r *limitWriter) Write(p []byte) (n int, err error) {
+	if int64(len(p)) > r.n {
+		p = p[:r.n]
+		err = errShortWrite
+	}
+	var errWrite error
+	n, errWrite = r.w.Write(p)
+	r.n -= int64(n)
+	if errWrite != nil {
+		err = errWrite
+	}
+	if err != nil {
+		return 0, err
+	}
+	return n, err
+}
+
+// limitWriter reads upto n bytes from the specified stream and returns errShortWrite
+// if more than n bytes are written
+type limitWriter struct {
+	w io.Writer
+	n int64
+}
+
+var errShortWrite = errors.New("[short write]")
+
+// bufferSize specifies the upper bound on the data before PostForm switches
+// to io.Pipe to avoid reading larger files into memory
+const bufferSize = 64 << 10 // 64 KiB

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -324,10 +325,51 @@ func (s *ClientSuite) TestCustomClient(c *C) {
 }
 
 func (s *ClientSuite) TestPostMultipartForm(c *C) {
+	files := []File{
+		File{
+			Name:     "a",
+			Filename: "a.json",
+			Reader:   strings.NewReader("file 1"),
+		},
+		File{
+			Name:     "a",
+			Filename: "b.json",
+			Reader:   strings.NewReader("file 2"),
+		},
+	}
+	expected := [][]byte{[]byte("file 1"), []byte("file 2")}
+	s.testPostMultipartForm(c, files, expected)
+}
+
+func (s *ClientSuite) TestPostMultipartFormLargeFile(c *C) {
+	buffer := make([]byte, 100<<10)
+	rand.Read(buffer)
+	files := []File{
+		File{
+			Name:     "a",
+			Filename: "a.json",
+			Reader:   strings.NewReader("file 1"),
+		},
+		File{
+			Name:     "a",
+			Filename: "b.json",
+			Reader:   strings.NewReader("file 2"),
+		},
+		File{
+			Name:     "a",
+			Filename: "c",
+			Reader:   bytes.NewReader(buffer),
+		},
+	}
+	expected := [][]byte{[]byte("file 1"), []byte("file 2"), buffer}
+	s.testPostMultipartForm(c, files, expected)
+}
+
+func (s *ClientSuite) testPostMultipartForm(c *C, files []File, expected [][]byte) {
 	var u *url.URL
 	var params url.Values
 	var method string
-	var data []string
+	var data [][]byte
 	var user, pass string
 	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -346,7 +388,7 @@ func (s *ClientSuite) TestPostMultipartForm(c *C) {
 			c.Assert(err, IsNil)
 			val, err := ioutil.ReadAll(f)
 			c.Assert(err, IsNil)
-			data = append(data, string(val))
+			data = append(data, val)
 		}
 
 		io.WriteString(w, "hello back")
@@ -359,14 +401,7 @@ func (s *ClientSuite) TestPostMultipartForm(c *C) {
 	out, err := clt.PostForm(
 		clt.Endpoint("a", "b"),
 		values,
-		File{
-			Name:     "a",
-			Filename: "a.json",
-			Reader:   strings.NewReader("file 1")},
-		File{
-			Name:     "a",
-			Filename: "a.json",
-			Reader:   strings.NewReader("file 2")},
+		files...,
 	)
 
 	c.Assert(err, IsNil)
@@ -375,7 +410,7 @@ func (s *ClientSuite) TestPostMultipartForm(c *C) {
 
 	c.Assert(method, Equals, "POST")
 	c.Assert(params, DeepEquals, values)
-	c.Assert(data, DeepEquals, []string{"file 1", "file 2"})
+	c.Assert(data, DeepEquals, expected)
 
 	c.Assert(user, Equals, "user")
 	c.Assert(pass, Equals, "pass")
