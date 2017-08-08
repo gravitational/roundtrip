@@ -481,6 +481,18 @@ func (s *ClientSuite) TestEndpoint(c *C) {
 	c.Assert(client.Endpoint("api", "resource"), Equals, "http://localhost/api/resource")
 }
 
+func (s *ClientSuite) TestLimitsWrites(c *C) {
+	var buf bytes.Buffer
+	w := &limitWriter{&buf, 10}
+	input := []byte("The quick brown fox jumps over the lazy dog")
+	r := bytes.NewReader(input)
+	_, err := io.Copy(w, r)
+	c.Assert(err, Equals, errShortWrite)
+	c.Assert(buf.Bytes(), DeepEquals, input[:10])
+	out, err := ioutil.ReadAll(r)
+	c.Assert(out, DeepEquals, input[10:], Commentf("expected %q but got %q", input[10:], out))
+}
+
 func newC(addr, version string, params ...ClientParam) *testClient {
 	c, err := NewClient(addr, version, params...)
 	if err != nil {

@@ -204,48 +204,6 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 	})
 }
 
-// tryWriteFormBuffer writes given vals and files into the form using a fixed size memory buffer.
-// Returns the output buffer and the boundary on success.
-// If the buffer is smaller than the data, fails with errShortWrite.
-func tryWriteFormBuffer(vals url.Values, files ...*formFile) (out io.Reader, boundary string, err error) {
-	var buf bytes.Buffer
-	w := &limitWriter{&buf, bufferSize}
-	writer := multipart.NewWriter(w)
-	err = writeForm(writer, vals, files...)
-	writer.Close()
-	if err == io.EOF && w.n >= 0 {
-		err = nil
-	}
-	if err == nil {
-		return &buf, writer.Boundary(), nil
-	}
-	return nil, "", err
-}
-
-func writeForm(writer *multipart.Writer, vals url.Values, files ...*formFile) error {
-	// write simple fields
-	for name, vals := range vals {
-		for _, val := range vals {
-			if err := writer.WriteField(name, val); err != nil {
-				return err
-			}
-		}
-	}
-
-	// add files
-	for _, f := range files {
-		w, err := f.create(writer)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(w, f)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // PostJSON posts JSON "application/json" encoded request body
 //
 // c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
@@ -521,6 +479,48 @@ func (b *bearerAuth) String() string {
 	return "Bearer " + b.token
 }
 
+// tryWriteFormBuffer writes given vals and files into the form using a fixed size memory buffer.
+// Returns the output buffer and the boundary on success.
+// If the buffer is smaller than the data, fails with errShortWrite.
+func tryWriteFormBuffer(vals url.Values, files ...*formFile) (out io.Reader, boundary string, err error) {
+	var buf bytes.Buffer
+	w := &limitWriter{&buf, bufferSize}
+	writer := multipart.NewWriter(w)
+	err = writeForm(writer, vals, files...)
+	writer.Close()
+	if err == io.EOF && w.n >= 0 {
+		err = nil
+	}
+	if err == nil {
+		return &buf, writer.Boundary(), nil
+	}
+	return nil, "", err
+}
+
+func writeForm(writer *multipart.Writer, vals url.Values, files ...*formFile) error {
+	// write simple fields
+	for name, vals := range vals {
+		for _, val := range vals {
+			if err := writer.WriteField(name, val); err != nil {
+				return err
+			}
+		}
+	}
+
+	// add files
+	for _, f := range files {
+		w, err := f.create(writer)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(w, f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func fromFiles(files []File) formFiles {
 	res := make([]*formFile, 0, len(files))
 	for _, file := range files {
@@ -581,9 +581,6 @@ func (r *limitWriter) Write(p []byte) (n int, err error) {
 	if errWrite != nil {
 		err = errWrite
 	}
-	if err != nil {
-		return 0, err
-	}
 	return n, err
 }
 
@@ -594,7 +591,7 @@ type limitWriter struct {
 	n int64
 }
 
-var errShortWrite = errors.New("[short write]")
+var errShortWrite = errors.New("short write")
 
 // bufferSize specifies the upper bound on the data before PostForm switches
 // to io.Pipe to avoid reading larger files into memory
