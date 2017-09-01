@@ -169,37 +169,35 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 			return c.client.Do(req)
 		}
 
-		buffers := fromFiles(files)
-		readBody, boundary, err := tryWriteFormBuffer(vals, buffers...)
-		if err == errShortWrite {
-			// Switch to io.Pipe as the data is larger than the limit
-			// we set on memory buffer
-			var writeBody *io.PipeWriter
-			readBody, writeBody = io.Pipe()
-			// readBody will be closed by client.Do
-			writer := multipart.NewWriter(writeBody)
-			boundary = writer.Boundary()
+		var buf bytes.Buffer
+		buf.Grow(bufferSize)
 
-			buffers.reset()
-			go func() {
-				err := writeForm(writer, vals, buffers...)
-				writer.Close()
-				writeBody.CloseWithError(err)
-			}()
-		} else if err != nil {
+		// Cache file reads in case we reach the memory limit
+		// and need to rewind
+		buffers := make([]*fileBuffer, 0, len(files))
+		for _, file := range files {
+			buffers = append(buffers, newFileBuffer(file))
+		}
+
+		writer := multipart.NewWriter(&limitWriter{&buf, bufferSize})
+		err := writeForm(writer, vals, buffers...)
+		writer.Close()
+		if err != nil && err != errShortWrite {
 			return nil, err
 		}
 
-		req, err := http.NewRequest("POST", endpoint, readBody)
+		if err == errShortWrite {
+			// Switch to io.Pipe as the data is larger than the memory limit
+			return c.writeWithPipe(endpoint, vals, buffers...)
+		}
+
+		req, err := http.NewRequest("POST", endpoint, &buf)
 		if err != nil {
-			if closer, ok := readBody.(io.Closer); ok {
-				closer.Close()
-			}
 			return nil, err
 		}
 		c.addAuth(req)
 		req.Header.Set("Content-Type",
-			fmt.Sprintf(`multipart/form-data;boundary="%v"`, boundary))
+			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 		return c.client.Do(req)
 	})
 }
@@ -381,6 +379,32 @@ func (c *Client) addAuth(r *http.Request) {
 	}
 }
 
+func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...*fileBuffer) (*http.Response, error) {
+	r, w := io.Pipe()
+	writer := multipart.NewWriter(w)
+
+	for _, buffer := range buffers {
+		// Combine cache and the rest of the file
+		buffer.Reader = io.MultiReader(buffer.cache, buffer.f.Reader)
+	}
+
+	go func() {
+		err := writeForm(writer, vals, buffers...)
+		writer.Close()
+		w.CloseWithError(err)
+	}()
+
+	req, err := http.NewRequest("POST", endpoint, r)
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
+
+	c.addAuth(req)
+	req.Header.Set("Content-Type", fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
+	return c.client.Do(req)
+}
+
 // Response indicates HTTP server response
 type Response struct {
 	code    int
@@ -479,25 +503,7 @@ func (b *bearerAuth) String() string {
 	return "Bearer " + b.token
 }
 
-// tryWriteFormBuffer writes given vals and files into the form using a fixed size memory buffer.
-// Returns the output buffer and the boundary on success.
-// If the buffer is smaller than the data, fails with errShortWrite.
-func tryWriteFormBuffer(vals url.Values, files ...*formFile) (out io.Reader, boundary string, err error) {
-	var buf bytes.Buffer
-	w := &limitWriter{&buf, bufferSize}
-	writer := multipart.NewWriter(w)
-	err = writeForm(writer, vals, files...)
-	writer.Close()
-	if err == io.EOF && w.n >= 0 {
-		err = nil
-	}
-	if err == nil {
-		return &buf, writer.Boundary(), nil
-	}
-	return nil, "", err
-}
-
-func writeForm(writer *multipart.Writer, vals url.Values, files ...*formFile) error {
+func writeForm(writer *multipart.Writer, vals url.Values, files ...*fileBuffer) error {
 	// write simple fields
 	for name, vals := range vals {
 		for _, val := range vals {
@@ -521,51 +527,28 @@ func writeForm(writer *multipart.Writer, vals url.Values, files ...*formFile) er
 	return nil
 }
 
-func fromFiles(files []File) formFiles {
-	res := make([]*formFile, 0, len(files))
-	for _, file := range files {
-		res = append(res, newFormFile(file))
-	}
-	return res
-}
-
-func (r formFiles) reset() {
-	for _, file := range r {
-		file.reset()
-	}
-}
-
-type formFiles []*formFile
-
-// newFormFile wraps the specified File f
-func newFormFile(f File) *formFile {
+// newFileBuffer creates a buffer for reading from the specified File f
+func newFileBuffer(f File) *fileBuffer {
 	buf := &bytes.Buffer{}
-	return &formFile{
-		r:     io.TeeReader(f.Reader, buf),
-		f:     f,
-		cache: buf,
+	return &fileBuffer{
+		Reader: io.TeeReader(f.Reader, buf),
+		cache:  buf,
+		f:      f,
 	}
 }
 
 // Read reads data from the underlying reader into the specified array p
-func (r *formFile) Read(p []byte) (n int, err error) {
-	return r.r.Read(p)
+func (r *fileBuffer) Read(p []byte) (n int, err error) {
+	return r.Reader.Read(p)
 }
 
-func (r *formFile) create(w *multipart.Writer) (io.Writer, error) {
+func (r *fileBuffer) create(w *multipart.Writer) (io.Writer, error) {
 	return w.CreateFormFile(r.f.Name, r.f.Filename)
 }
 
-// reset resets this file to read from the beginning
-// using internal cache.
-func (r *formFile) reset() {
-	r.r = io.MultiReader(r.cache, r.f.Reader)
-}
-
-// formFile is a File wrapper that buffers data from the specified File
-// and can be reset to read from the beginning
-type formFile struct {
-	r     io.Reader
+// fileBuffer is a File wrapper that buffers data from the specified File
+type fileBuffer struct {
+	io.Reader
 	cache *bytes.Buffer
 	f     File
 }
@@ -595,4 +578,4 @@ var errShortWrite = errors.New("short write")
 
 // bufferSize specifies the upper bound on the data before PostForm switches
 // to io.Pipe to avoid reading larger files into memory
-const bufferSize = 64 << 10 // 64 KiB
+const bufferSize = 1024 << 10 // 1 MiB

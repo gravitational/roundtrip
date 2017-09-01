@@ -342,7 +342,7 @@ func (s *ClientSuite) TestPostMultipartForm(c *C) {
 }
 
 func (s *ClientSuite) TestPostMultipartFormLargeFile(c *C) {
-	buffer := make([]byte, 100<<10)
+	buffer := make([]byte, 1024<<10)
 	rand.Read(buffer)
 	files := []File{
 		File{
