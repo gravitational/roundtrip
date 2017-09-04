@@ -174,11 +174,7 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 
 		// Cache file reads in case we reach the memory limit
 		// and need to rewind
-		buffers := make([]*fileBuffer, 0, len(files))
-		for _, file := range files {
-			buffers = append(buffers, newFileBuffer(file))
-		}
-
+		buffers := newBuffersFromFiles(files)
 		writer := multipart.NewWriter(&limitWriter{&buf, bufferSize})
 		err := writeForm(writer, vals, buffers...)
 		writer.Close()
@@ -188,6 +184,9 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 
 		if err == errShortWrite {
 			// Switch to io.Pipe as the data is larger than the memory limit
+			for i := range buffers {
+				buffers[i].rewind()
+			}
 			return c.writeWithPipe(endpoint, vals, buffers...)
 		}
 
@@ -379,14 +378,9 @@ func (c *Client) addAuth(r *http.Request) {
 	}
 }
 
-func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...*fileBuffer) (*http.Response, error) {
+func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...fileBuffer) (*http.Response, error) {
 	r, w := io.Pipe()
 	writer := multipart.NewWriter(w)
-
-	for _, buffer := range buffers {
-		// Combine cache and the rest of the file
-		buffer.Reader = io.MultiReader(buffer.cache, buffer.f.Reader)
-	}
 
 	go func() {
 		err := writeForm(writer, vals, buffers...)
@@ -503,7 +497,7 @@ func (b *bearerAuth) String() string {
 	return "Bearer " + b.token
 }
 
-func writeForm(writer *multipart.Writer, vals url.Values, files ...*fileBuffer) error {
+func writeForm(writer *multipart.Writer, vals url.Values, files ...fileBuffer) error {
 	// write simple fields
 	for name, vals := range vals {
 		for _, val := range vals {
@@ -514,12 +508,12 @@ func writeForm(writer *multipart.Writer, vals url.Values, files ...*fileBuffer) 
 	}
 
 	// add files
-	for _, f := range files {
-		w, err := f.create(writer)
+	for _, file := range files {
+		output, err := file.create(writer)
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(w, f)
+		_, err = io.Copy(output, file)
 		if err != nil {
 			return err
 		}
@@ -527,51 +521,66 @@ func writeForm(writer *multipart.Writer, vals url.Values, files ...*fileBuffer) 
 	return nil
 }
 
+// newBuffersFromFiles wraps the specified files with a reader
+// that caches the data it receives into a memory buffer
+func newBuffersFromFiles(files []File) []fileBuffer {
+	buffers := make([]fileBuffer, 0, len(files))
+	for _, file := range files {
+		buffers = append(buffers, newFileBuffer(file))
+	}
+	return buffers
+}
+
 // newFileBuffer creates a buffer for reading from the specified File f
-func newFileBuffer(f File) *fileBuffer {
+func newFileBuffer(file File) fileBuffer {
 	buf := &bytes.Buffer{}
-	return &fileBuffer{
-		Reader: io.TeeReader(f.Reader, buf),
+	return fileBuffer{
+		Reader: io.TeeReader(file.Reader, buf),
+		File:   file,
 		cache:  buf,
-		f:      f,
 	}
 }
 
 // Read reads data from the underlying reader into the specified array p
-func (r *fileBuffer) Read(p []byte) (n int, err error) {
+func (r fileBuffer) Read(p []byte) (n int, err error) {
 	return r.Reader.Read(p)
 }
 
 func (r *fileBuffer) create(w *multipart.Writer) (io.Writer, error) {
-	return w.CreateFormFile(r.f.Name, r.f.Filename)
+	return w.CreateFormFile(r.Name, r.Filename)
+}
+
+// rewind resets this fileBuffer to read from the beginning
+func (r *fileBuffer) rewind() {
+	r.Reader = io.MultiReader(r.cache, r.File.Reader)
 }
 
 // fileBuffer is a File wrapper that buffers data from the specified File
 type fileBuffer struct {
 	io.Reader
+	File
 	cache *bytes.Buffer
-	f     File
 }
 
 func (r *limitWriter) Write(p []byte) (n int, err error) {
-	if int64(len(p)) > r.n {
-		p = p[:r.n]
+	if int64(len(p)) > r.maxBytes {
+		p = p[:r.maxBytes]
 		err = errShortWrite
 	}
 	var errWrite error
-	n, errWrite = r.w.Write(p)
-	r.n -= int64(n)
+	n, errWrite = r.Writer.Write(p)
+	r.maxBytes -= int64(n)
 	if errWrite != nil {
 		err = errWrite
 	}
 	return n, err
 }
 
-// limitWriter reads upto n bytes from the specified stream and returns errShortWrite
+// limitWriter reads upto maxBytes bytes from the specified stream and returns errShortWrite
 // if more than n bytes are written
 type limitWriter struct {
-	w io.Writer
-	n int64
+	io.Writer
+	maxBytes int64
 }
 
 var errShortWrite = errors.New("short write")

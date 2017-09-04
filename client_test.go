@@ -50,9 +50,8 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	var form url.Values
 	var method string
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
-		user, pass, ok = r.BasicAuth()
+		user, pass, _ = r.BasicAuth()
 		u = r.URL
 		c.Assert(r.ParseForm(), IsNil)
 		form = r.Form
@@ -76,9 +75,10 @@ func (s *ClientSuite) TestPostForm(c *C) {
 
 func (s *ClientSuite) TestAddAuth(c *C) {
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		io.WriteString(w, "hello back")
 	})
 	defer srv.Close()
@@ -97,11 +97,12 @@ func (s *ClientSuite) TestAddAuth(c *C) {
 func (s *ClientSuite) TestPostJSON(c *C) {
 	var data interface{}
 	var user, pass string
-	var ok bool
 	var method string
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		method = r.Method
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		err := json.NewDecoder(r.Body).Decode(&data)
 		c.Assert(err, IsNil)
 	})
@@ -203,9 +204,10 @@ func (s *ClientSuite) TestGetFile(c *C) {
 	err := ioutil.WriteFile(fileName, []byte("hello there"), 0666)
 	c.Assert(err, IsNil)
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, "file.txt"))
 		http.ServeFile(w, r, fileName)
 	})
@@ -262,10 +264,11 @@ func (s *ClientSuite) TestOpenFile(c *C) {
 	defer os.RemoveAll(file.Name())
 
 	now := time.Now().UTC()
-	var ok bool
 	var user, pass string
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, file.Name()))
 		http.ServeContent(w, r, file.Name(), now, file)
 	})
@@ -371,9 +374,10 @@ func (s *ClientSuite) testPostMultipartForm(c *C, files []File, expected [][]byt
 	var method string
 	var data [][]byte
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		u = r.URL
 		c.Assert(r.ParseMultipartForm(64<<20), IsNil)
 		params = r.Form
@@ -418,9 +422,10 @@ func (s *ClientSuite) testPostMultipartForm(c *C, files []File, expected [][]byt
 
 func (s *ClientSuite) TestGetBasicAuth(c *C) {
 	var user, pass string
-	var ok bool
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+		var ok bool
 		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 	})
 	defer srv.Close()
 
