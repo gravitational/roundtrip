@@ -51,7 +51,9 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	var method string
 	var user, pass string
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
-		user, pass, _ = r.BasicAuth()
+		var ok bool
+		user, pass, ok = r.BasicAuth()
+		c.Assert(ok, Equals, true)
 		u = r.URL
 		c.Assert(r.ParseForm(), IsNil)
 		form = r.Form

@@ -522,7 +522,7 @@ func writeForm(writer *multipart.Writer, vals url.Values, files ...fileBuffer) e
 }
 
 // newBuffersFromFiles wraps the specified files with a reader
-// that caches the data it receives into a memory buffer
+// that caches data into a memory buffer
 func newBuffersFromFiles(files []File) []fileBuffer {
 	buffers := make([]fileBuffer, 0, len(files))
 	for _, file := range files {
@@ -531,7 +531,7 @@ func newBuffersFromFiles(files []File) []fileBuffer {
 	return buffers
 }
 
-// newFileBuffer creates a buffer for reading from the specified File f
+// newFileBuffer creates a buffer for reading from the specified File file
 func newFileBuffer(file File) fileBuffer {
 	buf := &bytes.Buffer{}
 	return fileBuffer{
@@ -576,8 +576,8 @@ func (r *limitWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
-// limitWriter reads upto maxBytes bytes from the specified stream and returns errShortWrite
-// if more than n bytes are written
+// limitWriter is an io.Writer that aborts with errShortWrite
+// if more than maxBytes bytes are written
 type limitWriter struct {
 	io.Writer
 	maxBytes int64
