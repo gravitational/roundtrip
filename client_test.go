@@ -275,10 +275,8 @@ func (s *ClientSuite) TestOpenFile(c *C) {
 	defer os.RemoveAll(file.Name())
 
 	now := time.Now().UTC()
-	var user, pass string
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
-		var ok bool
-		user, pass, ok = r.BasicAuth()
+		_, _, ok := r.BasicAuth()
 		c.Assert(ok, Equals, true)
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, file.Name()))
 		http.ServeContent(w, r, file.Name(), now, file)
@@ -340,12 +338,12 @@ func (s *ClientSuite) TestCustomClient(c *C) {
 
 func (s *ClientSuite) TestPostMultipartForm(c *C) {
 	files := []File{
-		File{
+		{
 			Name:     "a",
 			Filename: "a.json",
 			Reader:   strings.NewReader("file 1"),
 		},
-		File{
+		{
 			Name:     "a",
 			Filename: "b.json",
 			Reader:   strings.NewReader("file 2"),
@@ -359,17 +357,17 @@ func (s *ClientSuite) TestPostMultipartFormLargeFile(c *C) {
 	buffer := make([]byte, 1024<<10)
 	rand.Read(buffer)
 	files := []File{
-		File{
+		{
 			Name:     "a",
 			Filename: "a.json",
 			Reader:   strings.NewReader("file 1"),
 		},
-		File{
+		{
 			Name:     "a",
 			Filename: "b.json",
 			Reader:   strings.NewReader("file 2"),
 		},
-		File{
+		{
 			Name:     "a",
 			Filename: "c",
 			Reader:   bytes.NewReader(buffer),
