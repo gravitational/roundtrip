@@ -46,6 +46,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 )
@@ -542,6 +543,8 @@ type File struct {
 	Name     string
 	Filename string
 	Reader   io.Reader
+	// Header optionally specifies additional header key/values
+	Header map[string]string
 }
 
 // FileResponse indicates HTTP server file response
@@ -652,12 +655,26 @@ func (r fileBuffer) Read(p []byte) (n int, err error) {
 }
 
 func (r *fileBuffer) create(w *multipart.Writer) (io.Writer, error) {
-	return w.CreateFormFile(r.Name, r.Filename)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition",
+		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+			escapeQuotes(r.Name), escapeQuotes(r.Filename)))
+	h.Set("Content-Type", "application/octet-stream")
+	for k, v := range r.File.Header {
+		h.Set(k, v)
+	}
+	return w.CreatePart(h)
 }
 
 // rewind resets this fileBuffer to read from the beginning
 func (r *fileBuffer) rewind() {
 	r.Reader = io.MultiReader(r.cache, r.File.Reader)
+}
+
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
 }
 
 // fileBuffer is a File wrapper that buffers data from the specified File
