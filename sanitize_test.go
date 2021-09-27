@@ -65,6 +65,10 @@ func (s *SanitizeSuite) TestSanitizePath(c *check.C) {
 			inPath:   "http://example.com:3080/hello?foo=..",
 			outError: false,
 		},
+		{
+			inPath:   "http://example.com:3080/a+b",
+			outError: false,
+		},
 	}
 
 	for i, tt := range tests {
