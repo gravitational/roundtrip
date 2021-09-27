@@ -276,10 +276,9 @@ func (s *ClientSuite) TestOpenFile(c *C) {
 	defer os.RemoveAll(file.Name())
 
 	now := time.Now().UTC()
-	var user, pass string
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		var ok bool
-		user, pass, ok = r.BasicAuth()
+		_, _, ok = r.BasicAuth()
 		c.Assert(ok, Equals, true)
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%v`, file.Name()))
 		http.ServeContent(w, r, file.Name(), now, file)
