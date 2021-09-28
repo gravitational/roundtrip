@@ -24,7 +24,7 @@ import (
 )
 
 // errorMessage is the error message to return when invalid input is provided by the caller.
-const errorMessage = "invalid path, path can only be composed of characters, hyphens, slashes, and dots"
+const errorMessage = "invalid path, path can only be composed of characters, hyphens, plus signs, slashes, and dots"
 
 // whitelistPattern is the pattern of allowed characters for the path.
 var whitelistPattern = regexp.MustCompile(`^[0-9A-Za-z@/_:.+-]*$`)
