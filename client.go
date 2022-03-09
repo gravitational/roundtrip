@@ -224,11 +224,7 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 	})
 }
 
-// PostJSON posts JSON "application/json" encoded request body
-//
-// c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
-//
-func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
+func (c *Client) doJSON(ctx context.Context, method string, endpoint string, data interface{}) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -240,7 +236,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
 		data, err := json.Marshal(data)
-		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(data))
+		req, err := http.NewRequest(method, endpoint, bytes.NewBuffer(data))
 		if err != nil {
 			return nil, err
 		}
@@ -250,6 +246,14 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 		tracer.Start(req)
 		return c.client.Do(req)
 	}))
+}
+
+// PostJSON posts JSON "application/json" encoded request body
+//
+// c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
+//
+func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
+	return c.doJSON(ctx, http.MethodPost, endpoint, data)
 }
 
 // PutJSON posts JSON "application/json" encoded request body and "PUT" method
@@ -257,27 +261,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 // c.PutJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
 func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
-	// If the sanitizer is enabled, make sure the requested path is safe.
-	if c.sanitizerEnabled {
-		err := isPathSafe(endpoint)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	tracer := c.newTracer()
-	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		data, err := json.Marshal(data)
-		req, err := http.NewRequest(http.MethodPut, endpoint, bytes.NewBuffer(data))
-		if err != nil {
-			return nil, err
-		}
-		req = req.WithContext(ctx)
-		req.Header.Set("Content-Type", "application/json")
-		c.addAuth(req)
-		tracer.Start(req)
-		return c.client.Do(req)
-	}))
+	return c.doJSON(ctx, http.MethodPut, endpoint, data)
 }
 
 // PatchJSON posts JSON "application/json" encoded request body and "PATCH" method
@@ -285,27 +269,7 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{})
 // c.PatchJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
 func (c *Client) PatchJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
-	// If the sanitizer is enabled, make sure the requested path is safe.
-	if c.sanitizerEnabled {
-		err := isPathSafe(endpoint)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	tracer := c.newTracer()
-	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		data, err := json.Marshal(data)
-		req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewBuffer(data))
-		if err != nil {
-			return nil, err
-		}
-		req = req.WithContext(ctx)
-		req.Header.Set("Content-Type", "application/json")
-		c.addAuth(req)
-		tracer.Start(req)
-		return c.client.Do(req)
-	}))
+	return c.doJSON(ctx, http.MethodPatch, endpoint, data)
 }
 
 // Delete executes DELETE request to the endpoint with no body
