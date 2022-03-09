@@ -166,7 +166,7 @@ func (c *Client) Endpoint(params ...string) string {
 	return fmt.Sprintf("%s/%s", c.addr, strings.Join(params, "/"))
 }
 
-func (c *Client) doForm(ctx context.Context, method string, endpoint string, vals url.Values, files []File) (*Response, error) {
+func (c *Client) submitForm(ctx context.Context, method string, endpoint string, vals url.Values, files []File) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -225,7 +225,7 @@ func (c *Client) doForm(ctx context.Context, method string, endpoint string, val
 // c.PostForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
 //
 func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
-	return c.doForm(ctx, http.MethodPost, endpoint, vals, files)
+	return c.submitForm(ctx, http.MethodPost, endpoint, vals, files)
 }
 
 // PutForm puts urlencoded form with values and returns the result
@@ -233,7 +233,7 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 // c.PutForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
 //
 func (c *Client) PutForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
-	return c.doForm(ctx, http.MethodPut, endpoint, vals, files)
+	return c.submitForm(ctx, http.MethodPut, endpoint, vals, files)
 }
 
 // PatchForm patches urlencoded form with values and returns the result
@@ -241,10 +241,10 @@ func (c *Client) PutForm(ctx context.Context, endpoint string, vals url.Values, 
 // c.PatchForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
 //
 func (c *Client) PatchForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
-	return c.doForm(ctx, http.MethodPatch, endpoint, vals, files)
+	return c.submitForm(ctx, http.MethodPatch, endpoint, vals, files)
 }
 
-func (c *Client) doJSON(ctx context.Context, method string, endpoint string, data interface{}) (*Response, error) {
+func (c *Client) submitJSON(ctx context.Context, method string, endpoint string, data interface{}) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -273,7 +273,7 @@ func (c *Client) doJSON(ctx context.Context, method string, endpoint string, dat
 // c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
 func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
-	return c.doJSON(ctx, http.MethodPost, endpoint, data)
+	return c.submitJSON(ctx, http.MethodPost, endpoint, data)
 }
 
 // PutJSON posts JSON "application/json" encoded request body and "PUT" method
@@ -281,7 +281,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 // c.PutJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
 func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
-	return c.doJSON(ctx, http.MethodPut, endpoint, data)
+	return c.submitJSON(ctx, http.MethodPut, endpoint, data)
 }
 
 // PatchJSON posts JSON "application/json" encoded request body and "PATCH" method
@@ -289,7 +289,7 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{})
 // c.PatchJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
 func (c *Client) PatchJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
-	return c.doJSON(ctx, http.MethodPatch, endpoint, data)
+	return c.submitJSON(ctx, http.MethodPatch, endpoint, data)
 }
 
 // Delete executes DELETE request to the endpoint with no body
