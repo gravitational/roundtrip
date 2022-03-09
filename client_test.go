@@ -46,7 +46,7 @@ type ClientSuite struct {
 
 var _ = Suite(&ClientSuite{})
 
-func (s *ClientSuite) TestPostForm(c *C) {
+func (s *ClientSuite) TestPostPutPatchForm(c *C) {
 	var u *url.URL
 	var form url.Values
 	var method string
@@ -64,14 +64,34 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	defer srv.Close()
 
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+
 	values := url.Values{"a": []string{"b"}}
 	out, err := clt.PostForm(context.Background(), clt.Endpoint("a", "b"), values)
-
 	c.Assert(err, IsNil)
 	c.Assert(string(out.Bytes()), Equals, "hello back")
 	c.Assert(u.String(), DeepEquals, "/v1/a/b")
 	c.Assert(form, DeepEquals, values)
 	c.Assert(method, Equals, http.MethodPost)
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+
+	values = url.Values{"a": []string{"b put"}}
+	out, err = clt.PutForm(context.Background(), clt.Endpoint("a", "b"), values)
+	c.Assert(err, IsNil)
+	c.Assert(string(out.Bytes()), Equals, "hello back")
+	c.Assert(u.String(), DeepEquals, "/v1/a/b")
+	c.Assert(form, DeepEquals, values)
+	c.Assert(method, Equals, http.MethodPut)
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+
+	values = url.Values{"a": []string{"b patch"}}
+	out, err = clt.PatchForm(context.Background(), clt.Endpoint("a", "b"), values)
+	c.Assert(err, IsNil)
+	c.Assert(string(out.Bytes()), Equals, "hello back")
+	c.Assert(u.String(), DeepEquals, "/v1/a/b")
+	c.Assert(form, DeepEquals, values)
+	c.Assert(method, Equals, http.MethodPatch)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
 }

@@ -166,11 +166,7 @@ func (c *Client) Endpoint(params ...string) string {
 	return fmt.Sprintf("%s/%s", c.addr, strings.Join(params, "/"))
 }
 
-// PostForm posts urlencoded form with values and returns the result
-//
-// c.PostForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
-//
-func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
+func (c *Client) doForm(ctx context.Context, method string, endpoint string, vals url.Values, files []File) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -181,7 +177,7 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 
 	return c.RoundTrip(func() (*http.Response, error) {
 		if len(files) == 0 {
-			req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(vals.Encode()))
+			req, err := http.NewRequest(method, endpoint, strings.NewReader(vals.Encode()))
 			if err != nil {
 				return nil, err
 			}
@@ -222,6 +218,30 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 		c.addAuth(req)
 		return c.client.Do(req)
 	})
+}
+
+// PostForm posts urlencoded form with values and returns the result
+//
+// c.PostForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
+//
+func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
+	return c.doForm(ctx, http.MethodPost, endpoint, vals, files)
+}
+
+// PutForm puts urlencoded form with values and returns the result
+//
+// c.PutForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
+//
+func (c *Client) PutForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
+	return c.doForm(ctx, http.MethodPut, endpoint, vals, files)
+}
+
+// PatchForm patches urlencoded form with values and returns the result
+//
+// c.PatchForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
+//
+func (c *Client) PatchForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
+	return c.doForm(ctx, http.MethodPatch, endpoint, vals, files)
 }
 
 func (c *Client) doJSON(ctx context.Context, method string, endpoint string, data interface{}) (*Response, error) {
