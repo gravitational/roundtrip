@@ -177,11 +177,10 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 
 	return c.RoundTrip(func() (*http.Response, error) {
 		if len(files) == 0 {
-			req, err := http.NewRequest(method, endpoint, strings.NewReader(vals.Encode()))
+			req, err := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(vals.Encode()))
 			if err != nil {
 				return nil, err
 			}
-			req = req.WithContext(ctx)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			c.addAuth(req)
 			return c.client.Do(req)
@@ -208,11 +207,10 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 			return c.writeWithPipe(endpoint, vals, buffers...)
 		}
 
-		req, err := http.NewRequest(http.MethodPost, endpoint, &buf)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type",
 			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 		c.addAuth(req)
@@ -256,11 +254,10 @@ func (c *Client) submitJSON(ctx context.Context, method string, endpoint string,
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
 		data, err := json.Marshal(data)
-		req, err := http.NewRequest(method, endpoint, bytes.NewBuffer(data))
+		req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewBuffer(data))
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 		c.addAuth(req)
 		tracer.Start(req)
@@ -307,11 +304,10 @@ func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error)
 
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -351,11 +347,10 @@ func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*
 	baseUrl.RawQuery = params.Encode()
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		req, err := http.NewRequest(http.MethodGet, baseUrl.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseUrl.String(), nil)
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -380,11 +375,10 @@ func (c *Client) GetFile(ctx context.Context, endpoint string, params url.Values
 		return nil, err
 	}
 	baseUrl.RawQuery = params.Encode()
-	req, err := http.NewRequest(http.MethodGet, baseUrl.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseUrl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
 	c.addAuth(req)
 	tracer := c.newTracer()
 	tracer.Start(req)
