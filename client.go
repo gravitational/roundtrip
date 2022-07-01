@@ -254,6 +254,9 @@ func (c *Client) submitJSON(ctx context.Context, method string, endpoint string,
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
 		data, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
 		req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewBuffer(data))
 		if err != nil {
 			return nil, err

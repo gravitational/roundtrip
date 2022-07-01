@@ -21,64 +21,37 @@ import (
 	"net/url"
 	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSanitizer(t *testing.T) { check.TestingT(t) }
-
-type SanitizeSuite struct {
-}
-
-var _ = check.Suite(&SanitizeSuite{})
-var _ = fmt.Printf
-
-func (s *SanitizeSuite) SetUpSuite(c *check.C) {
-}
-
-func (s *SanitizeSuite) TearDownSuite(c *check.C) {
-}
-
-func (s *SanitizeSuite) TearDownTest(c *check.C) {
-}
-
-func (s *SanitizeSuite) SetUpTest(c *check.C) {
-}
-
-func (s *SanitizeSuite) TestSanitizePath(c *check.C) {
-	tests := []struct {
-		inPath   string
-		outError bool
+func TestSanitizePath(t *testing.T) {
+	for _, test := range []struct {
+		inPath string
+		assert require.ErrorAssertionFunc
 	}{
 		{
-			inPath:   "http://example.com:3080/hello",
-			outError: false,
+			inPath: "http://example.com:3080/hello",
+			assert: require.NoError,
 		},
 		{
-			inPath:   "http://example.com:3080/hello/../world",
-			outError: true,
+			inPath: "http://example.com:3080/hello/../world",
+			assert: require.Error,
 		},
 		{
-			inPath:   fmt.Sprintf("http://localhost:3080/hello/%v/goodbye", url.PathEscape("..")),
-			outError: true,
+			inPath: fmt.Sprintf("http://localhost:3080/hello/%v/goodbye", url.PathEscape("..")),
+			assert: require.Error,
 		},
 		{
-			inPath:   "http://example.com:3080/hello?foo=..",
-			outError: false,
+			inPath: "http://example.com:3080/hello?foo=..",
+			assert: require.NoError,
 		},
 		{
-			inPath:   "http://example.com:3080/a+b",
-			outError: false,
+			inPath: "http://example.com:3080/a+b",
+			assert: require.NoError,
 		},
-	}
-
-	for i, tt := range tests {
-		comment := check.Commentf("Test %v", i)
-
-		err := isPathSafe(tt.inPath)
-		if tt.outError {
-			c.Assert(err, check.NotNil, comment)
-		} else {
-			c.Assert(err, check.IsNil, comment)
-		}
+	} {
+		t.Run(test.inPath, func(t *testing.T) {
+			test.assert(t, isPathSafe(test.inPath))
+		})
 	}
 }

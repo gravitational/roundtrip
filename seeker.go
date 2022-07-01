@@ -6,7 +6,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/gravitational/trace"
@@ -144,11 +143,11 @@ func (s *seeker) Seek(offset int64, whence int) (int64, error) {
 	newOffset := s.currentOffset
 
 	switch whence {
-	case os.SEEK_CUR:
+	case io.SeekCurrent:
 		newOffset += int64(offset)
-	case os.SEEK_END:
+	case io.SeekEnd:
 		newOffset = s.fileSize + int64(offset)
-	case os.SEEK_SET:
+	case io.SeekStart:
 		newOffset = int64(offset)
 	}
 	if newOffset < 0 {

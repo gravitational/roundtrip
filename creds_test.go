@@ -18,69 +18,61 @@ package roundtrip
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
+	"testing"
 
 	"github.com/gravitational/trace"
-
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Suite(&CredsSuite{})
-
-type CredsSuite struct {
-	c *testClient
-}
-
-func (s *CredsSuite) TestBasicAuth(c *C) {
+func TestBasicAuth(t *testing.T) {
 	var creds *AuthCreds
 	var credsErr error
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		creds, credsErr = ParseAuthHeaders(r)
 	})
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
 	_, err := clt.Get(context.Background(), clt.Endpoint("test"), url.Values{})
-	c.Assert(err, IsNil)
-
-	c.Assert(credsErr, IsNil)
-	c.Assert(creds, DeepEquals, &AuthCreds{Type: AuthBasic, Username: "user", Password: "pass"})
+	require.NoError(t, err)
+	require.NoError(t, credsErr)
+	require.Equal(t, &AuthCreds{Type: AuthBasic, Username: "user", Password: "pass"}, creds)
 }
 
-func (s *CredsSuite) TestTokenAuth(c *C) {
+func TestTokenAuth(t *testing.T) {
 	var creds *AuthCreds
 	var credsErr error
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		creds, credsErr = ParseAuthHeaders(r)
 	})
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	clt := newC(srv.URL, "v1", BearerAuth("token1"))
 	_, err := clt.Get(context.Background(), clt.Endpoint("test"), url.Values{})
-	c.Assert(err, IsNil)
-
-	c.Assert(credsErr, IsNil)
-	c.Assert(creds, DeepEquals, &AuthCreds{Type: AuthBearer, Password: "token1"})
+	require.NoError(t, err)
+	require.NoError(t, credsErr)
+	require.Equal(t, &AuthCreds{Type: AuthBearer, Password: "token1"}, creds)
 }
 
-func (s *CredsSuite) TestTokenURIAuth(c *C) {
+func TestTokenURIAuth(t *testing.T) {
 	var creds *AuthCreds
 	var credsErr error
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		creds, credsErr = ParseAuthHeaders(r)
 	})
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	clt := newC(srv.URL, "v1")
 	_, err := clt.Get(context.Background(), clt.Endpoint("test"), url.Values{AccessTokenQueryParam: []string{"token2"}})
-	c.Assert(err, IsNil)
-
-	c.Assert(credsErr, IsNil)
-	c.Assert(creds, DeepEquals, &AuthCreds{Type: AuthBearer, Password: "token2"})
+	require.NoError(t, err)
+	require.NoError(t, credsErr)
+	require.Equal(t, &AuthCreds{Type: AuthBearer, Password: "token2"}, creds)
 }
 
-func (s *CredsSuite) TestGarbage(c *C) {
+func TestGarbage(t *testing.T) {
 	type tc struct {
 		Headers map[string][]string
 		Error   error
@@ -88,51 +80,49 @@ func (s *CredsSuite) TestGarbage(c *C) {
 	testCases := []tc{
 		// missing auth requests
 		{
-			Headers: map[string][]string{"Authorization": []string{""}},
+			Headers: map[string][]string{"Authorization": {""}},
 			Error:   &AccessDeniedError{},
 		},
 		{
-			Headers: map[string][]string{"Authorisation": []string{"Bearer blabla"}},
+			Headers: map[string][]string{"Authorisation": {"Bearer blabla"}},
 			Error:   &AccessDeniedError{},
 		},
 		// corrupted auth requests
 		{
-			Headers: map[string][]string{"Authorization": []string{"WAT? blabla"}},
+			Headers: map[string][]string{"Authorization": {"WAT? blabla"}},
 			Error:   &ParameterError{},
 		},
 		{
-			Headers: map[string][]string{"Authorization": []string{"Basic bad"}},
+			Headers: map[string][]string{"Authorization": {"Basic bad"}},
 			Error:   &ParameterError{},
 		},
 		{
-			Headers: map[string][]string{"Authorization": []string{"Bearer"}},
+			Headers: map[string][]string{"Authorization": {"Bearer"}},
 			Error:   &ParameterError{},
 		},
 	}
 
 	for i, tc := range testCases {
-		var credsErr error
-		srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
-			_, credsErr = ParseAuthHeaders(r)
-		})
-		defer srv.Close()
+		t.Run(fmt.Sprintf("test%v", i), func(t *testing.T) {
+			var credsErr error
+			srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
+				_, credsErr = ParseAuthHeaders(r)
+			})
+			t.Cleanup(srv.Close)
 
-		comment := Commentf("test %v", i)
-
-		req, err := http.NewRequest("GET", srv.URL, nil)
-		c.Assert(err, IsNil, comment)
-		for key, vals := range tc.Headers {
-			for _, val := range vals {
-				req.Header.Add(key, val)
+			req, err := http.NewRequest("GET", srv.URL, nil)
+			require.NoError(t, err)
+			for key, vals := range tc.Headers {
+				for _, val := range vals {
+					req.Header.Add(key, val)
+				}
 			}
-		}
-		_, err = http.DefaultClient.Do(req)
-		c.Assert(err, IsNil, comment)
+			_, err = http.DefaultClient.Do(req)
+			require.NoError(t, err)
 
-		c.Assert(credsErr, NotNil, comment)
-		origErr := credsErr.(trace.Error)
-
-		c.Assert(origErr.OrigError(), FitsTypeOf, tc.Error, comment)
+			require.Error(t, credsErr)
+			origErr := credsErr.(trace.Error)
+			require.IsType(t, tc.Error, origErr.OrigError())
+		})
 	}
-
 }
