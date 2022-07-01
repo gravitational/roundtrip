@@ -3,7 +3,7 @@ module github.com/gravitational/roundtrip
 go 1.17
 
 require (
-	github.com/gravitational/trace v1.1.17
+	github.com/gravitational/trace v1.1.19
 	github.com/stretchr/testify v1.7.0
 )
 
