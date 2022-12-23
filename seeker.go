@@ -68,7 +68,7 @@ func newSeeker(c *Client, ctx context.Context, endpoint string) (ReadSeekCloser,
 		if err != nil {
 			return nil, err
 		}
-		c.addAuth(req)
+		c.addHeaders(req, "")
 		return c.client.Do(req)
 	})
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *seeker) initReader() error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	s.client.addAuth(req)
+	s.client.addHeaders(req, "")
 
 	if s.currentOffset > 0 {
 		// If we are at different offset, issue a range request from there.

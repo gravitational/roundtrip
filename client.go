@@ -103,6 +103,15 @@ func SanitizerEnabled(sanitizerEnabled bool) ClientParam {
 	}
 }
 
+// ExtraHeaders sets a map of extra HTTP headers to be included in requests.
+// "Authorization" and "Content-Type" headers are ignored.
+func ExtraHeaders(extraHeaders map[string]string) ClientParam {
+	return func(c *Client) error {
+		c.extraHeaders = extraHeaders
+		return nil
+	}
+}
+
 // Client is a wrapper holding HTTP client. It hold target server address and a version prefix,
 // and provides common features for building HTTP client wrappers.
 type Client struct {
@@ -121,6 +130,8 @@ type Client struct {
 	// sanitizerEnabled will enable the input sanitizer which passes the URL
 	// path through a strict whitelist.
 	sanitizerEnabled bool
+	// extraHeaders is a map of extra HTTP headers to be included in requests.
+	extraHeaders map[string]string
 }
 
 // NewClient returns a new instance of roundtrip.Client, or nil and error
@@ -181,8 +192,7 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 			if err != nil {
 				return nil, err
 			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			c.addAuth(req)
+			c.addHeaders(req, "application/x-www-form-urlencoded")
 			return c.client.Do(req)
 		}
 
@@ -211,9 +221,7 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("Content-Type",
-			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
-		c.addAuth(req)
+		c.addHeaders(req, fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 		return c.client.Do(req)
 	})
 }
@@ -261,8 +269,7 @@ func (c *Client) submitJSON(ctx context.Context, method string, endpoint string,
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("Content-Type", "application/json")
-		c.addAuth(req)
+		c.addHeaders(req, "application/json")
 		tracer.Start(req)
 		return c.client.Do(req)
 	}))
@@ -311,7 +318,7 @@ func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error)
 		if err != nil {
 			return nil, err
 		}
-		c.addAuth(req)
+		c.addHeaders(req, "")
 		tracer.Start(req)
 		return c.client.Do(req)
 	}))
@@ -354,7 +361,7 @@ func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*
 		if err != nil {
 			return nil, err
 		}
-		c.addAuth(req)
+		c.addHeaders(req, "")
 		tracer.Start(req)
 		return c.client.Do(req)
 	}))
@@ -382,7 +389,7 @@ func (c *Client) GetFile(ctx context.Context, endpoint string, params url.Values
 	if err != nil {
 		return nil, err
 	}
-	c.addAuth(req)
+	c.addHeaders(req, "")
 	tracer := c.newTracer()
 	tracer.Start(req)
 	re, err := c.client.Do(req)
@@ -458,9 +465,19 @@ func (c *Client) SetAuthHeader(h http.Header) {
 	}
 }
 
-func (c *Client) addAuth(r *http.Request) {
+// addHeaders sets all HTTP headers.
+// "Authorization" and "Content-Type" headers present in extra headers are ignored.
+func (c *Client) addHeaders(r *http.Request, contentType string) {
+	for header, v := range c.extraHeaders {
+		if header != "Authorization" && header != "Content-Type" {
+			r.Header.Set(header, v)
+		}
+	}
 	if c.auth != nil {
 		r.Header.Set("Authorization", c.auth.String())
+	}
+	if contentType != "" {
+		r.Header.Set("Content-Type", contentType)
 	}
 }
 
@@ -480,8 +497,7 @@ func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...file
 		return nil, err
 	}
 
-	c.addAuth(req)
-	req.Header.Set("Content-Type", fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
+	c.addHeaders(req, fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 	return c.client.Do(req)
 }
 
