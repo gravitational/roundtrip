@@ -144,11 +144,14 @@ func TestPostPutPatchJSON(t *testing.T) {
 	var data interface{}
 	var user, pass string
 	var method string
+	var userAgent string
 
+	expectedUserAgent := "api/1.0.0"
 	ch := make(chan error, 1)
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		method = r.Method
+		userAgent = r.UserAgent()
 
 		user, pass, ok = r.BasicAuth()
 		if !ok {
@@ -160,7 +163,9 @@ func TestPostPutPatchJSON(t *testing.T) {
 	})
 	t.Cleanup(srv.Close)
 
-	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	header := make(http.Header)
+	header.Set("User-Agent", expectedUserAgent)
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"), WithHeader(header))
 
 	values := map[string]interface{}{"hello": "there"}
 	_, err := clt.PostJSON(context.Background(), clt.Endpoint("a", "b"), values)
@@ -191,6 +196,7 @@ func TestPostPutPatchJSON(t *testing.T) {
 
 	require.NoError(t, <-ch)
 
+	require.Equal(t, expectedUserAgent, userAgent)
 	require.Equal(t, http.MethodPatch, method)
 	require.Equal(t, "user", user)
 	require.Equal(t, "pass", pass)
@@ -200,16 +206,22 @@ func TestPostPutPatchJSON(t *testing.T) {
 func TestDelete(t *testing.T) {
 	var method string
 	var user, pass string
+	var userAgent string
 
+	expectedUserAgent := "api/1.0.0"
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, _ = r.BasicAuth()
 		method = r.Method
+		userAgent = r.UserAgent()
 	})
 	t.Cleanup(srv.Close)
 
-	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	header := make(http.Header)
+	header.Set("User-Agent", expectedUserAgent)
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"), WithHeader(header))
 	re, err := clt.Delete(context.Background(), clt.Endpoint("a", "b"))
 	require.NoError(t, err)
+	require.Equal(t, expectedUserAgent, userAgent)
 	require.Equal(t, http.MethodDelete, method)
 	require.Equal(t, http.StatusOK, re.Code())
 	require.Equal(t, "user", user)
@@ -241,16 +253,22 @@ func TestDeleteP(t *testing.T) {
 func TestGet(t *testing.T) {
 	var method string
 	var query url.Values
+	var userAgent string
+	expectedUserAgent := "api/1.0.0"
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		method = r.Method
 		query = r.URL.Query()
+		userAgent = r.UserAgent()
 	})
 	t.Cleanup(srv.Close)
 
-	clt := newC(srv.URL, "v1")
+	header := make(http.Header)
+	header.Set("User-Agent", expectedUserAgent)
+	clt := newC(srv.URL, "v1", WithHeader(header))
 	values := url.Values{"q": []string{"1", "2"}}
 	_, err := clt.Get(context.Background(), clt.Endpoint("a", "b"), values)
 	require.NoError(t, err)
+	require.Equal(t, expectedUserAgent, userAgent)
 	require.Equal(t, http.MethodGet, method)
 	require.Equal(t, values, query)
 }
@@ -274,10 +292,13 @@ func TestGetFile(t *testing.T) {
 	require.NoError(t, err)
 
 	var user, pass string
+	var userAgent string
+	expectedUserAgent := "api/1.0.0"
 	ch := make(chan error, 1)
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		user, pass, ok = r.BasicAuth()
+		userAgent = r.UserAgent()
 		if !ok {
 			ch <- errors.New("basic auth headers invalid")
 			return
@@ -289,7 +310,9 @@ func TestGetFile(t *testing.T) {
 	})
 	t.Cleanup(srv.Close)
 
-	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	header := make(http.Header)
+	header.Set("User-Agent", expectedUserAgent)
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"), WithHeader(header))
 	f, err := clt.GetFile(context.Background(), clt.Endpoint("download"), url.Values{})
 	require.NoError(t, err)
 	defer f.Close()
@@ -298,6 +321,7 @@ func TestGetFile(t *testing.T) {
 
 	data, err := io.ReadAll(f.Body())
 	require.NoError(t, err)
+	require.Equal(t, expectedUserAgent, userAgent)
 	require.Equal(t, "hello there", string(data))
 	require.Equal(t, "file.txt", f.FileName())
 	require.Equal(t, user, "user")
@@ -444,11 +468,14 @@ func testPostMultipartForm(t *testing.T, files []File, expected [][]byte) {
 	var method string
 	var data [][]byte
 	var user, pass string
+	var userAgent string
 
+	expectedUserAgent := "api/1.0.0"
 	ch := make(chan error, 100)
 	srv := serveHandler(func(w http.ResponseWriter, r *http.Request) {
 		defer close(ch)
 		user, pass, _ = r.BasicAuth()
+		userAgent = r.UserAgent()
 
 		u = r.URL
 		if err := r.ParseMultipartForm(64 << 20); err != nil {
@@ -485,7 +512,9 @@ func testPostMultipartForm(t *testing.T, files []File, expected [][]byte) {
 	})
 	t.Cleanup(srv.Close)
 
-	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
+	header := make(http.Header)
+	header.Set("User-Agent", expectedUserAgent)
+	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"), WithHeader(header))
 	values := url.Values{"a": []string{"b"}}
 	out, err := clt.PostForm(
 		context.Background(),
@@ -503,6 +532,7 @@ func testPostMultipartForm(t *testing.T, files []File, expected [][]byte) {
 	require.Equal(t, "hello back", string(out.Bytes()))
 	require.Equal(t, "/v1/a/b", u.String())
 
+	require.Equal(t, expectedUserAgent, userAgent)
 	require.Equal(t, http.MethodPost, method)
 	require.Equal(t, values, params)
 	require.Equal(t, expected, data)
