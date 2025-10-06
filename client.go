@@ -94,6 +94,14 @@ func CookieJar(jar http.CookieJar) ClientParam {
 	}
 }
 
+// WithHeader sets default HTTP header for this client.
+func WithHeader(headers http.Header) ClientParam {
+	return func(c *Client) error {
+		c.header = headers
+		return nil
+	}
+}
+
 // SanitizerEnabled will enable the input sanitizer which passes the URL
 // path through a strict whitelist.
 func SanitizerEnabled(sanitizerEnabled bool) ClientParam {
@@ -116,6 +124,8 @@ type Client struct {
 	auth fmt.Stringer
 	// jar is a set of cookies passed with requests
 	jar http.CookieJar
+	// header is the http.Header applied on every request.
+	header http.Header
 	// newTracer creates new request tracer
 	newTracer NewTracer
 	// sanitizerEnabled will enable the input sanitizer which passes the URL
@@ -146,6 +156,9 @@ func NewClient(addr, v string, params ...ClientParam) (*Client, error) {
 	}
 	if c.newTracer == nil {
 		c.newTracer = NewNopTracer
+	}
+	if c.header == nil {
+		c.header = make(http.Header)
 	}
 	return c, nil
 }
@@ -181,6 +194,7 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 			if err != nil {
 				return nil, err
 			}
+			req.Header = c.header.Clone()
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			c.addAuth(req)
 			return c.client.Do(req)
@@ -211,6 +225,7 @@ func (c *Client) submitForm(ctx context.Context, method string, endpoint string,
 		if err != nil {
 			return nil, err
 		}
+		req.Header = c.header.Clone()
 		req.Header.Set("Content-Type",
 			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 		c.addAuth(req)
@@ -261,6 +276,7 @@ func (c *Client) submitJSON(ctx context.Context, method string, endpoint string,
 		if err != nil {
 			return nil, err
 		}
+		req.Header = c.header.Clone()
 		req.Header.Set("Content-Type", "application/json")
 		c.addAuth(req)
 		tracer.Start(req)
@@ -311,6 +327,7 @@ func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error)
 		if err != nil {
 			return nil, err
 		}
+		req.Header = c.header.Clone()
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -354,6 +371,7 @@ func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*
 		if err != nil {
 			return nil, err
 		}
+		req.Header = c.header.Clone()
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -382,6 +400,7 @@ func (c *Client) GetFile(ctx context.Context, endpoint string, params url.Values
 	if err != nil {
 		return nil, err
 	}
+	req.Header = c.header.Clone()
 	c.addAuth(req)
 	tracer := c.newTracer()
 	tracer.Start(req)
@@ -479,7 +498,7 @@ func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...file
 		r.Close()
 		return nil, err
 	}
-
+	req.Header = c.header.Clone()
 	c.addAuth(req)
 	req.Header.Set("Content-Type", fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
 	return c.client.Do(req)
